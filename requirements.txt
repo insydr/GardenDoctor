@@ -1,6 +1,7 @@
 # Garden Doctor - Dependencies
 # Python 3.10+
 # Target: Hugging Face Spaces (CPU/GPU tier)
+# Last updated: March 2026
 
 # =============================================================================
 # Core Framework
