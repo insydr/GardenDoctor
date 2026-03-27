@@ -4,7 +4,7 @@ emoji: 🌿
 colorFrom: green
 colorTo: emerald
 sdk: gradio
-sdk_version: 5.29.0
+sdk_version: 6.10.0
 app_file: app.py
 pinned: false
 license: mit
@@ -24,50 +24,81 @@ short_description: AI-powered plant disease detection and care recommendations
 
 <div align="center">
 
-[![Gradio](https://img.shields.io/badge/Gradio-4.44.0-FF6B35?style=for-the-badge&logo=gradio&logoColor=white)](https://gradio.app/)
-[![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Spaces-CPU%20Tier-FFD21E?style=for-the-badge)](https://huggingface.co/spaces)
+[![Gradio](https://img.shields.io/badge/Gradio-6.10.0-FF6B35?style=for-the-badge&logo=gradio&logoColor=white)](https://gradio.app/)
+[![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Spaces-Live-FFD21E?style=for-the-badge)](https://huggingface.co/spaces/insydr/garden-doctor)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-000000?style=for-the-badge)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=for-the-badge)](https://huggingface.co/spaces/insydr/garden-doctor)
 
 **Your intelligent plant health companion — Upload a leaf photo, get instant diagnosis and treatment guidance powered by AI.**
 
-[🎯 Live Demo](#-demo) • [✨ Features](#-features) • [📖 How to Use](#-how-to-use) • [🔧 Technical Details](#-technical-details)
+[🎯 Live Demo](https://huggingface.co/spaces/insydr/garden-doctor) • [✨ Features](#-features) • [📖 How to Use](#-how-to-use) • [🔧 Technical Details](#-technical-details)
 
 </div>
 
 ---
 
-## 📸 Screenshot
+## 🚀 Project Status
+
+| Aspect | Status |
+|--------|--------|
+| **Development** | ✅ Complete |
+| **Testing** | ✅ All tests passing |
+| **Deployment** | ✅ Live on Hugging Face Spaces |
+| **Documentation** | ✅ Complete |
+| **CI/CD** | ✅ GitHub Actions configured |
+
+### Live Application
+
+The Garden Doctor is now live and accessible at: **[https://huggingface.co/spaces/insydr/garden-doctor](https://huggingface.co/spaces/insydr/garden-doctor)**
+
+### Implementation Summary
+
+| Category | Implemented | Total | Status |
+|----------|-------------|-------|--------|
+| Core Features (P0) | 16 | 16 | ✅ 100% |
+| Enhanced Features (P1-P2) | 10 | 10 | ✅ 100% |
+| Technical Architecture | 6 | 6 | ✅ 100% |
+| UI/UX Requirements | 5 | 5 | ✅ 100% |
+| Future Enhancements (P3) | 0 | 3 | ⏳ Planned |
+
+---
+
+## 📸 Screenshots
+
+### Main Interface
+
+The application features a clean, green-themed interface with image upload, climate zone selection, and diagnosis results displayed in a two-column layout.
 
 <div align="center">
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                          │
-│   ┌─────────────────────────────┐    ┌─────────────────────────────┐    │
-│   │                             │    │                             │    │
-│   │    📷 IMAGE UPLOAD          │    │    📊 RESULTS               │    │
-│   │    ┌───────────────────┐    │    │                             │    │
-│   │    │                   │    │    │    🩺 Diagnosis: Early      │    │
-│   │    │   🍃 Leaf Photo   │    │    │       Blight               │    │
-│   │    │                   │    │    │                             │    │
-│   │    └───────────────────┘    │    │    🟢 Confidence: 85%       │    │
-│   │                             │    │                             │    │
-│   │    🌍 Climate: Temperate    │    │    🌱 Treatment Options     │    │
-│   │                             │    │       • Cultural practices  │    │
-│   │    [🔬 Diagnose] [🗑️ Clear] │    │       • Organic options     │    │
-│   │                             │    │       • Conventional care   │    │
-│   └─────────────────────────────┘    │                             │    │
-│                                       │    📄 Download PDF Report   │    │
-│   ┌─────────────────────────────────┐│                             │    │
-│   │ 🖼️ Example Images (click to test)│└─────────────────────────────┘    │
-│   │ [🍅] [🥔] [🍎] [🌽] [🍇] ...    │                                   │
-│   └─────────────────────────────────┘                                   │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+![Main Interface](assets/screenshot_main_interface.jpg)
 
-*Screenshot placeholder - Actual UI features a green-themed Gradio interface with responsive layout*
+*Upload a leaf photo, select your climate zone, and get instant diagnosis with confidence scores*
+
+</div>
+
+### Diagnosis Report
+
+After analysis, users receive a comprehensive report including disease identification, symptoms, causes, and treatment recommendations.
+
+<div align="center">
+
+![Diagnosis Report](assets/screenshot_diagnosis_report.jpg)
+
+*Detailed diagnosis showing Early Blight with 85% confidence, including symptoms, causes, and treatment options*
+
+</div>
+
+### Example Gallery
+
+Pre-loaded example images allow users to quickly test the system and understand expected results.
+
+<div align="center">
+
+![Examples Gallery](assets/screenshot_examples_gallery.jpg)
+
+*Click any example to auto-fill and diagnose - includes Tomato, Potato, Apple, Grape, and Corn samples*
 
 </div>
 
@@ -193,11 +224,11 @@ The application provides transparent confidence indicators:
 
 | Component | Technology | Version |
 |-----------|------------|---------|
-| UI Framework | Gradio | 4.44.0 |
-| ML Backend | PyTorch | 2.4.0 |
-| Model Hub | Hugging Face Transformers | 4.44.2 |
-| Image Processing | Pillow | 10.4.0 |
-| PDF Generation | fpdf2 | 2.7.9 |
+| UI Framework | Gradio | 6.10.0 |
+| ML Backend | PyTorch | Latest |
+| Model Hub | Hugging Face Transformers | Latest |
+| Image Processing | Pillow | Latest |
+| PDF Generation | fpdf2 | Latest |
 
 ### System Architecture
 
@@ -211,8 +242,8 @@ The application provides transparent confidence indicators:
 │  └─────────────┘  └─────────────┘  │ • PDF Download                  │  │
 │                                     └─────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
+                                   │
+                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MODEL MANAGER (Singleton Cache)                       │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
@@ -221,8 +252,8 @@ The application provides transparent confidence indicators:
 │  │ Caching: Global singleton prevents reload per request            │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
+                                   │
+                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │              LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection                │
 │                         (Vision-Language Model)                          │
@@ -341,6 +372,37 @@ See [`.github/GITHUB_ACTIONS_SETUP.md`](.github/GITHUB_ACTIONS_SETUP.md) for det
 
 ---
 
+## 🔮 Future Enhancements
+
+The following features are planned for future releases, as outlined in the PRD:
+
+### Priority P3 - Planned Features
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| **Batch Upload** | Upload and analyze multiple leaf images simultaneously | P3 |
+| **Expert Review Submission** | Option to submit uncertain cases for expert review | P3 |
+| **Community Data Sharing** | Contribute diagnosis data to community dataset (opt-in) | P3 |
+
+### Potential Future Improvements
+
+| Enhancement | Description | Status |
+|-------------|-------------|--------|
+| 🌐 **Multi-Language Support** | Interface and reports in multiple languages | Planned |
+| 📱 **Mobile App** | Native iOS/Android application | Under Consideration |
+| 🔔 **Push Notifications** | Alerts for disease outbreaks in user's region | Under Consideration |
+| 📈 **Treatment Tracking** | Log treatments and track plant recovery over time | Under Consideration |
+| 🤝 **Expert Integration** | Direct connection to agricultural extension services | Under Consideration |
+| 🗺️ **Geographic Disease Maps** | Visualize disease prevalence by region | Under Consideration |
+| 🧠 **Model Improvements** | Fine-tune on additional plant species and diseases | Under Consideration |
+| 💾 **User History** | Save diagnosis history for registered users | Under Consideration |
+
+### Contributing to Future Development
+
+We welcome contributions to help implement these features! See the [Contributing](#-contributing) section for how to get involved.
+
+---
+
 ## ⚠️ Disclaimer
 
 <div align="center">
@@ -378,6 +440,10 @@ GardenDoctor/
 ├── README.md                   # This file (HF Spaces metadata header)
 ├── space_config.yaml           # Detailed HF Spaces configuration
 ├── .gitignore                  # Git ignore patterns
+├── assets/                     # Screenshots and media assets
+│   ├── screenshot_main_interface.jpg
+│   ├── screenshot_diagnosis_report.jpg
+│   └── screenshot_examples_gallery.jpg
 ├── docs/
 │   ├── Garden_Doctor_PRD.md    # Product Requirements Document
 │   ├── TESTING_CHECKLIST.md    # Pre-launch testing checklist
@@ -389,6 +455,12 @@ GardenDoctor/
 │   ├── apple_scab.jpg
 │   ├── corn_rust.jpg
 │   └── grape_black_rot.jpg
+├── tests/                      # Test suite
+│   ├── test_confidence.py
+│   ├── test_diagnose.py
+│   ├── test_formatting.py
+│   ├── test_integration.py
+│   └── test_utils.py
 └── src/                        # Utility modules
     ├── __init__.py
     ├── prompts.py              # Prompt templates
