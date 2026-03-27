@@ -1387,11 +1387,13 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
         neutral_hue="slate",
     )
     
-    with gr.Blocks(
-        theme=theme,
-        css=CUSTOM_CSS,
-        title="🌿 Garden Doctor AI",
-    ) as demo:
+    # Gradio 6.0: theme and css go in launch(), not Blocks()
+    # Store them as attributes for later use
+    demo = gr.Blocks(title="🌿 Garden Doctor AI")
+    demo.theme = theme
+    demo.css = CUSTOM_CSS
+    
+    with demo:
         
         # State for storing diagnosis result
         diagnosis_state = gr.State(value=None)
@@ -1508,21 +1510,17 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
         gr.Markdown("### 🖼️ Example Images")
         gr.Markdown("*Click an example to auto-fill and diagnose*")
         
-        # Build examples list: [image_path, climate, disease_name]
+        # Build examples list: [image_path, climate] - only inputs that match
         examples_list = [
-            [ex["path"], ex["climate"], ex["expected_disease"]]
+            [ex["path"], ex["climate"]]
             for ex in EXAMPLE_IMAGES
         ]
         
         gr.Examples(
             examples=examples_list,
             inputs=[image_input, climate_input],
-            outputs=[image_input, climate_input],
-            fn=lambda img, climate, disease: (img, climate),
-            cache_examples=False,
             label="Click to test diagnosis",
             examples_per_page=6,
-            run_on_click=True
         )
         
         gr.HTML('</div>')
@@ -1670,12 +1668,12 @@ def main():
     if HEALTH_CHECK_ENABLED:
         print("🏥 Health check endpoint enabled at /health")
     
+    # Gradio 6.0: theme and css passed to launch()
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
         share=False,
         show_error=True,
-        show_api=True,
     )
 
 
