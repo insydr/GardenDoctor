@@ -1,55 +1,46 @@
 # Garden Doctor - Dependencies
-# Python 3.10+
-# Target: Hugging Face Spaces (CPU/GPU tier)
-# Last updated: March 2026
+# Python 3.13+
+# Target: Hugging Face Spaces (CPU tier)
 
 # =============================================================================
-# Machine Learning - Core
+# PyTorch - CPU version
 # =============================================================================
-# PyTorch - CPU version (default for Hugging Face Spaces free tier)
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.5.1+cpu
-torchvision==0.20.1+cpu
+torch
+torchvision
 
 # =============================================================================
 # Transformers & LLaVA Dependencies
 # =============================================================================
-transformers==4.44.2
-accelerate==0.33.0
-safetensors==0.4.4
-sentencepiece==0.2.0
-protobuf==5.27.3
-
-# =============================================================================
-# Quantization Support (PRD Section 11)
-# =============================================================================
-# bitsandbytes for 4-bit quantization (GPU only)
-# Note: On CPU tier, this will gracefully fall back to float32
-bitsandbytes==0.43.3
+transformers
+accelerate
+safetensors
+sentencepiece
+protobuf
 
 # =============================================================================
 # Hugging Face Hub
 # =============================================================================
-huggingface-hub>=0.24.6
+huggingface-hub
 
 # =============================================================================
-# Image Processing (PRD Section 11 - LANCZOS resampling)
+# Image Processing
 # =============================================================================
-Pillow>=10.4.0
+Pillow
 
 # =============================================================================
-# PDF Generation (PRD Feature 6)
+# PDF Generation
 # =============================================================================
-fpdf2>=2.7.9
+fpdf2
 
 # =============================================================================
-# System Monitoring (PRD Section 11 - Health Check)
+# System Monitoring
 # =============================================================================
-psutil>=6.0.0
+psutil
 
 # =============================================================================
 # Utilities
 # =============================================================================
-numpy>=1.26.0
-requests>=2.32.0
-tqdm>=4.66.0
+numpy
+requests
+tqdm
