@@ -291,6 +291,42 @@ Configure behavior via environment variables:
 | `GARDEN_DOCTOR_4BIT` | `auto` | Quantization: `auto`, `true`, `false` |
 | `HEALTH_CHECK_ENABLED` | `true` | Enable `/health` endpoint |
 
+### GitHub Actions CI/CD
+
+This repository includes automated workflows for continuous integration and deployment:
+
+#### Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `sync-to-hf.yml` | Push to `main` | Auto-sync to Hugging Face Spaces |
+| `run-tests.yml` | Push/PR to `main` | Run pytest test suite |
+
+#### Setup Required
+
+To enable automatic syncing to Hugging Face Spaces:
+
+1. **Create HF Token**: Go to [Hugging Face Settings](https://huggingface.co/settings/tokens) → Create token with **Write** permissions
+2. **Add GitHub Secret**: Repository → Settings → Secrets → Actions → New secret:
+   - **Name**: `HF_TOKEN`
+   - **Value**: Your Hugging Face write token
+3. **Verify**: Push to main branch and check Actions tab
+
+<details>
+<summary>🔧 Manual Deployment Trigger</summary>
+
+You can also manually trigger deployment:
+
+1. Go to **Actions** tab in GitHub
+2. Select **"Sync to Hugging Face Spaces"**
+3. Click **"Run workflow"**
+4. Enable **"Force full sync"** if needed
+5. Click **"Run workflow"**
+
+</details>
+
+See [`.github/GITHUB_ACTIONS_SETUP.md`](.github/GITHUB_ACTIONS_SETUP.md) for detailed setup instructions.
+
 ---
 
 ## 📊 Performance Metrics

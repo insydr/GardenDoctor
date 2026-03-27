@@ -1,0 +1,196 @@
+# GitHub Actions Workflow: Sync to Hugging Face Spaces
+# Automatically syncs the Garden Doctor repository to HF Spaces on push to main
+
+name: Sync to Hugging Face Spaces
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+      - 'tests/**'
+      - '**.gitkeep'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: 'Force full sync even if no changes'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  HF_USERNAME: insydr
+  HF_SPACE_NAME: garden-doctor
+  HF_SPACE_REPO: insydr/garden-doctor
+
+jobs:
+  sync-to-hf:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout GitHub Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          pip install huggingface-hub>=0.24.0
+          pip install requests
+      
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+      
+      - name: Check for changes
+        id: check_changes
+        run: |
+          # Check if there are actual changes to sync (excluding docs/tests)
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -vE '(^docs/|^tests/|^\.github/|\.md$|\.gitkeep$)' || true)
+          
+          if [ -z "$CHANGED_FILES" ] && [ "${{ github.event.inputs.force_sync }}" != "true" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No relevant changes to sync"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected, will sync to HF Spaces"
+          fi
+      
+      - name: Sync to Hugging Face Spaces
+        if: steps.check_changes.outputs.has_changes == 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python << 'EOF'
+          import os
+          import subprocess
+          import sys
+          from huggingface_hub import HfApi, create_repo, repo_exists
+          
+          # Configuration
+          hf_token = os.environ.get("HF_TOKEN")
+          hf_username = os.environ.get("HF_USERNAME", "insydr")
+          hf_space_name = os.environ.get("HF_SPACE_NAME", "garden-doctor")
+          hf_space_repo = os.environ.get("HF_SPACE_REPO", f"{hf_username}/{hf_space_name}")
+          
+          if not hf_token:
+              print("ERROR: HF_TOKEN not found in environment")
+              sys.exit(1)
+          
+          print(f"Syncing to Hugging Face Space: {hf_space_repo}")
+          
+          # Initialize API
+          api = HfApi()
+          
+          # Check if space exists, create if not
+          try:
+              if not repo_exists(repo_id=hf_space_repo, repo_type="space", token=hf_token):
+                  print(f"Creating new Space: {hf_space_repo}")
+                  create_repo(
+                      repo_id=hf_space_repo,
+                      repo_type="space",
+                      space_sdk="gradio",
+                      token=hf_token,
+                      private=False
+                  )
+                  print("Space created successfully")
+          except Exception as e:
+              print(f"Warning checking/creating repo: {e}")
+          
+          # Files to upload (excluding unnecessary files)
+          exclude_patterns = [
+              '.git/',
+              '.github/',
+              '__pycache__/',
+              '*.pyc',
+              '*.pyo',
+              '.gitignore',
+              '.env',
+              'tests/',
+              'docs/',
+              '*.md',
+              '.gitkeep',
+              'pytest.ini',
+              'spaces_app_config.json',
+              'space_config.yaml',
+          ]
+          
+          # Upload all files
+          print("Uploading files to Hugging Face Spaces...")
+          
+          try:
+              api.upload_folder(
+                  folder_path=".",
+                  repo_id=hf_space_repo,
+                  repo_type="space",
+                  token=hf_token,
+                  ignore_patterns=exclude_patterns,
+                  commit_message=f"Sync from GitHub: {os.environ.get('GITHUB_SHA', 'unknown')[:7]}"
+              )
+              print("✅ Successfully synced to Hugging Face Spaces!")
+              print(f"🌐 Space URL: https://huggingface.co/spaces/{hf_space_repo}")
+              
+          except Exception as e:
+              print(f"❌ Error uploading to HF Spaces: {e}")
+              sys.exit(1)
+          EOF
+      
+      - name: Verify Space Status
+        if: steps.check_changes.outputs.has_changes == 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python << 'EOF'
+          import os
+          import requests
+          import time
+          
+          hf_space_repo = os.environ.get("HF_SPACE_REPO", "insydr/garden-doctor")
+          
+          # Wait a moment for the space to start building
+          time.sleep(5)
+          
+          # Check space status
+          url = f"https://huggingface.co/spaces/{hf_space_repo}"
+          try:
+              response = requests.get(url, timeout=30)
+              if response.status_code == 200:
+                  print(f"✅ Space is accessible at: {url}")
+              else:
+                  print(f"⚠️ Space returned status code: {response.status_code}")
+          except Exception as e:
+              print(f"⚠️ Could not verify space status: {e}")
+          
+          print("\n📦 Deployment initiated!")
+          print("⏳ The Space may take 5-10 minutes to build on first deployment.")
+          print(f"🔗 Check status at: https://huggingface.co/spaces/{hf_space_repo}")
+          EOF
+      
+      - name: Create Summary
+        if: always()
+        run: |
+          echo "## 🚀 Hugging Face Spaces Sync" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then
+            echo "✅ **Status**: Successfully synced to Hugging Face Spaces" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🔗 **Space URL**: https://huggingface.co/spaces/${{ env.HF_SPACE_REPO }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📝 **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **Status**: Skipped (no relevant changes)" >> $GITHUB_STEP_SUMMARY
+          fi
