@@ -16,6 +16,7 @@ tags:
   - llava
   - multimodal
   - agriculture
+  - vision-language-model
 short_description: AI-powered plant disease detection and care recommendations
 ---
 
@@ -23,207 +24,312 @@ short_description: AI-powered plant disease detection and care recommendations
 
 <div align="center">
 
-![Garden Doctor Banner](https://img.shields.io/badge/Plant%20Disease%20Detection-AI%20Powered-brightgreen?style=for-the-badge)
-![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Spaces-yellow?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge)
-![Gradio](https://img.shields.io/badge/Gradio-4.x-orange?style=for-the-badge)
+[![Gradio](https://img.shields.io/badge/Gradio-4.44.0-FF6B35?style=for-the-badge&logo=gradio&logoColor=white)](https://gradio.app/)
+[![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Spaces-CPU%20Tier-FFD21E?style=for-the-badge)](https://huggingface.co/spaces)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-000000?style=for-the-badge)](LICENSE)
 
-**AI-powered plant disease detection and care recommendation system**
+**Your intelligent plant health companion — Upload a leaf photo, get instant diagnosis and treatment guidance powered by AI.**
 
-[Demo](#-demo) • [Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Model](#-ai-model)
+[🎯 Live Demo](#-demo) • [✨ Features](#-features) • [📖 How to Use](#-how-to-use) • [🔧 Technical Details](#-technical-details)
 
 </div>
 
 ---
 
-## 📋 Description
+## 📸 Screenshot
 
-Garden Doctor is an AI-powered application that helps gardeners, farmers, and agricultural enthusiasts identify plant diseases from leaf images and receive actionable treatment recommendations. Leveraging a fine-tuned multimodal vision-language model, the application provides:
+<div align="center">
 
-- **Accurate Disease Detection** for 38 plant diseases across 14 crop species
-- **Detailed Explanations** of identified conditions and their causes
-- **Climate-Aware Recommendations** tailored to your growing environment
-- **Treatment Protocols** including organic and conventional options
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│   ┌─────────────────────────────┐    ┌─────────────────────────────┐    │
+│   │                             │    │                             │    │
+│   │    📷 IMAGE UPLOAD          │    │    📊 RESULTS               │    │
+│   │    ┌───────────────────┐    │    │                             │    │
+│   │    │                   │    │    │    🩺 Diagnosis: Early      │    │
+│   │    │   🍃 Leaf Photo   │    │    │       Blight               │    │
+│   │    │                   │    │    │                             │    │
+│   │    └───────────────────┘    │    │    🟢 Confidence: 85%       │    │
+│   │                             │    │                             │    │
+│   │    🌍 Climate: Temperate    │    │    🌱 Treatment Options     │    │
+│   │                             │    │       • Cultural practices  │    │
+│   │    [🔬 Diagnose] [🗑️ Clear] │    │       • Organic options     │    │
+│   │                             │    │       • Conventional care   │    │
+│   └─────────────────────────────┘    │                             │    │
+│                                       │    📄 Download PDF Report   │    │
+│   ┌─────────────────────────────────┐│                             │    │
+│   │ 🖼️ Example Images (click to test)│└─────────────────────────────┘    │
+│   │ [🍅] [🥔] [🍎] [🌽] [🍇] ...    │                                   │
+│   └─────────────────────────────────┘                                   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-### How It Works
+*Screenshot placeholder - Actual UI features a green-themed Gradio interface with responsive layout*
 
-1. **Upload** a photo of an affected plant leaf
-2. **Select** your climate zone for tailored recommendations
-3. **Receive** instant diagnosis with treatment guidance
-4. **Follow** step-by-step care instructions
+</div>
+
+---
+
+## 🎯 Project Overview
+
+### The Problem
+
+Plant diseases cause significant crop losses for home gardeners and small-scale farmers. Identifying these diseases early is crucial for effective treatment, but most people lack access to agricultural experts. Delayed or incorrect diagnosis often leads to:
+
+- **Preventable crop losses** from treatable conditions
+- **Misuse of pesticides** from incorrect self-diagnosis  
+- **Wasted time and money** on ineffective treatments
+- **Spread of preventable diseases** to healthy plants
+
+### Our Solution
+
+**Garden Doctor** democratizes plant disease diagnosis using state-of-the-art AI. Simply upload a photo of an affected leaf, and receive:
+
+- **Instant disease identification** with confidence scoring
+- **Detailed symptom explanations** to help you understand the condition
+- **Climate-tailored treatment recommendations** including organic and conventional options
+- **Prevention strategies** specific to your growing environment
+- **Downloadable PDF reports** for record-keeping or consultation
+
+### Value Proposition
+
+| User Need | Garden Doctor Solution |
+|-----------|------------------------|
+| Quick diagnosis | ⚡ Results in 5-30 seconds |
+| Trusted guidance | 🎯 ~92% accuracy on known diseases |
+| Actionable advice | 🌱 Step-by-step treatment protocols |
+| Accessibility | 📱 Works on any device with a browser |
+| Cost-effective | 💰 Free to use on Hugging Face Spaces |
 
 ---
 
 ## ✨ Features
 
+### Core Capabilities
+
 | Feature | Description |
 |---------|-------------|
-| 📷 **Image Upload** | Upload or capture photos of affected plant leaves |
-| 🌡️ **Climate Selection** | Get recommendations tailored to your climate zone |
-| 🔬 **Disease Detection** | Identify plant diseases with confidence scores |
-| 📝 **Care Instructions** | Receive detailed treatment and prevention advice |
-| 📊 **Example Gallery** | Test with pre-loaded example images |
-| 📄 **PDF Export** | Download diagnosis reports for record-keeping |
+| 📷 **Multi-Source Image Input** | Upload files, drag & drop, or use your device camera |
+| 🌡️ **Climate-Aware Analysis** | Recommendations tailored to Tropical, Temperate, Arid, or Cold zones |
+| 🔬 **Confidence Scoring** | Visual indicators (High/Medium/Low) help assess result reliability |
+| 📝 **Comprehensive Reports** | Symptoms, causes, and treatment options in clear language |
+| 🖼️ **Example Gallery** | Pre-loaded samples to test the system instantly |
+| 📄 **PDF Export** | Download detailed reports for offline reference |
+
+### Smart Confidence System
+
+The application provides transparent confidence indicators:
+
+| Confidence Level | Score | Interpretation |
+|------------------|-------|----------------|
+| 🟢 High | ≥80% | Reliable diagnosis - follow recommendations with confidence |
+| 🟡 Moderate | 50-79% | Reasonable detection - consider additional verification |
+| 🔴 Low | <50% | Uncertain result - review image quality tips provided |
 
 ---
 
-## 🤖 AI Model
+## 📖 How to Use
 
-This application uses **[LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection](https://huggingface.co/YuchengShi/LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection)** - a fine-tuned multimodal vision-language model optimized for plant disease detection.
+### Step-by-Step Guide
 
-### Architecture
+1. **📷 Upload Your Image**
+   - Click the upload area or drag and drop a photo
+   - Supported formats: JPEG, PNG, WebP
+   - For best results: clear, well-lit photos showing the affected leaf clearly
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    GRADIO INTERFACE                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ Image Input │  │ Climate     │  │ Diagnosis Output    │ │
-│  │ (Upload/Cam)│  │ Dropdown    │  │ (Label + Markdown)  │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│              LLaVA-v1.5-7B-Plant-Leaf-Diseases              │
-│                   (Vision-Language Model)                   │
-│  ┌─────────────────┐          ┌─────────────────┐          │
-│  │  Vision Encoder │  ──────▶ │ Language Model  │          │
-│  │   (CLIP-ViT)    │          │    (Vicuna)     │          │
-│  └─────────────────┘          └─────────────────┘          │
-└─────────────────────────────────────────────────────────────┘
-```
+2. **🌍 Select Your Climate Zone**
+   - **Tropical**: Hot, humid (Southeast Asia, Caribbean)
+   - **Temperate**: Four seasons (Eastern US, Europe, East Asia)
+   - **Arid**: Hot, dry (Southwest US, Middle East)
+   - **Cold**: Short growing season (Northern regions)
 
-### Supported Plants & Diseases
+3. **🔬 Click "Diagnose"**
+   - Wait 5-30 seconds while AI analyzes your image
+   - Progress indicators show analysis stages
+
+4. **📊 Review Your Results**
+   - Disease identification with confidence score
+   - Detailed symptoms and cause explanation
+   - Treatment options: Cultural, Organic, Conventional
+   - Prevention tips for your climate
+
+5. **📄 Download Report (Optional)**
+   - Click "Download PDF Report" for a formatted document
+   - Includes all diagnosis details, timestamp, and disclaimer
+
+### Tips for Best Results
 
 <details>
-<summary>View full list (14 species, 38 conditions)</summary>
+<summary>📸 Photography Guidelines</summary>
 
-| Plant | Diseases |
-|-------|----------|
-| 🍎 Apple | Apple scab, Black rot, Cedar apple rust |
-| 🫐 Blueberry | Healthy |
-| 🍒 Cherry | Powdery mildew |
-| 🌽 Corn | Cercospora leaf spot, Common rust, Northern Leaf Blight |
-| 🍇 Grape | Black rot, Esca, Leaf blight |
-| 🍊 Orange | Huanglongbing (Citrus greening) |
-| 🍑 Peach | Bacterial spot |
-| 🌶️ Pepper | Bacterial spot |
-| 🥔 Potato | Early blight, Late blight |
-| 🍇 Raspberry | Healthy |
-| 🫘 Soybean | Healthy |
-| 🎃 Squash | Powdery mildew |
-| 🍓 Strawberry | Leaf scorch |
-| 🍅 Tomato | Bacterial spot, Early blight, Late blight, Leaf mold, Septoria leaf spot, Spider mites, Target spot, Yellow leaf curl virus, Mosaic virus |
+- ✅ **Lighting**: Use natural daylight when possible
+- ✅ **Focus**: Ensure the affected area is sharp and clear
+- ✅ **Coverage**: Leaf should fill at least 70% of the frame
+- ✅ **Background**: Use a plain, contrasting background
+- ✅ **Multiple angles**: Take 2-3 photos of different affected leaves
+- ❌ **Avoid**: Shadows, reflections, blurry images, dark photos
 
 </details>
 
 ---
 
-## 🚀 Installation
+## 🔧 Technical Details
 
-### Prerequisites
+### AI Model
 
-- Python 3.10 or higher
-- pip package manager
-- (Optional) CUDA-compatible GPU for faster inference
+| Aspect | Specification |
+|--------|---------------|
+| **Model** | [LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection](https://huggingface.co/YuchengShi/LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection) |
+| **Architecture** | Vision-Language Model (VLM) |
+| **Vision Encoder** | CLIP ViT-L/14 (336×336 resolution) |
+| **Language Model** | Vicuna-7B (fine-tuned for plant pathology) |
+| **Training Data** | PlantVillage Dataset (54,000+ images) |
+| **Base Accuracy** | ~92% on PlantVillage test set |
 
-### Setup
+### Framework Stack
 
-```bash
-# Clone the repository
-git clone https://github.com/insydr/GardenDoctor.git
-cd GardenDoctor
+| Component | Technology | Version |
+|-----------|------------|---------|
+| UI Framework | Gradio | 4.44.0 |
+| ML Backend | PyTorch | 2.4.0 |
+| Model Hub | Hugging Face Transformers | 4.44.2 |
+| Image Processing | Pillow | 10.4.0 |
+| PDF Generation | fpdf2 | 2.7.9 |
 
-# Create virtual environment
-python -m venv vv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python app.py
-```
-
-### Dependencies
+### System Architecture
 
 ```
-gradio==4.44.0
-torch==2.4.0
-transformers==4.44.2
-Pillow==10.4.0
-accelerate==0.33.0
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           GRADIO INTERFACE                               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────────┐  │
+│  │ Image Input │  │ Climate     │  │ Diagnosis Output                │  │
+│  │ (Upload/    │  │ Dropdown    │  │ • Label (confidence score)      │  │
+│  │  Webcam)    │  │             │  │ • Markdown (detailed report)    │  │
+│  └─────────────┘  └─────────────┘  │ • PDF Download                  │  │
+│                                     └─────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    MODEL MANAGER (Singleton Cache)                       │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │ Quantization: 4-bit (GPU) / float16 (GPU) / float32 (CPU)       │    │
+│  │ Timeout: 45 seconds with graceful cancellation                   │    │
+│  │ Caching: Global singleton prevents reload per request            │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│              LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection                │
+│                         (Vision-Language Model)                          │
+│  ┌───────────────────────┐          ┌───────────────────────┐           │
+│  │   Vision Encoder      │          │    Language Model     │           │
+│  │   (CLIP ViT-L/14)     │  ──────▶ │    (Vicuna-7B)        │           │
+│  │   336×336 input       │          │    Plant-tuned        │           │
+│  └───────────────────────┘          └───────────────────────┘           │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Supported Plants & Diseases
+
+<details>
+<summary>📋 View full list (14 species, 38 conditions)</summary>
+
+| Plant | Diseases Detected |
+|-------|-------------------|
+| 🍎 **Apple** | Apple scab, Black rot, Cedar apple rust |
+| 🫐 **Blueberry** | Healthy detection |
+| 🍒 **Cherry** | Powdery mildew |
+| 🌽 **Corn** | Cercospora leaf spot, Common rust, Northern Leaf Blight |
+| 🍇 **Grape** | Black rot, Esca, Leaf blight |
+| 🍊 **Orange** | Huanglongbing (Citrus greening) |
+| 🍑 **Peach** | Bacterial spot |
+| 🌶️ **Pepper** | Bacterial spot |
+| 🥔 **Potato** | Early blight, Late blight |
+| 🍇 **Raspberry** | Healthy detection |
+| 🫘 **Soybean** | Healthy detection |
+| 🎃 **Squash** | Powdery mildew |
+| 🍓 **Strawberry** | Leaf scorch |
+| 🍅 **Tomato** | Bacterial spot, Early blight, Late blight, Leaf mold, Septoria leaf spot, Spider mites, Target spot, Yellow leaf curl virus, Mosaic virus, Healthy |
+
+</details>
 
 ---
 
-## 📖 Usage
+## 🚀 Deployment
 
-### Running Locally
+### Hugging Face Spaces (Recommended)
 
-```bash
-python app.py
-```
+This application is optimized for Hugging Face Spaces:
 
-The application will be available at `http://localhost:7860`
+1. **Fork or clone** this Space
+2. The Space automatically builds using the YAML header in this README
+3. Model weights download automatically on first run (~13GB)
+4. Initial startup may take 5-10 minutes; subsequent runs are faster
 
-### Using the Interface
+### Hardware Tiers
 
-1. **Upload Image** - Drag & drop or click to upload a plant leaf photo
-2. **Select Climate** - Choose your growing region (Tropical, Temperate, Arid, Cold)
-3. **Click Diagnose** - Wait for AI analysis (5-30 seconds depending on hardware)
-4. **View Results** - See disease identification and treatment recommendations
+| Tier | RAM | Startup Time | Inference Time | Monthly Cost |
+|------|-----|--------------|----------------|--------------|
+| **CPU Basic** (Free) | 16GB | 3-5 min | 15-30s | Free |
+| **CPU Upgrade** | 32GB | 2-3 min | 10-20s | $5-10 |
+| **GPU T4** | 16GB VRAM | 1-2 min | 2-5s | $20-30 |
+| **GPU A10G** | 24GB VRAM | <1 min | 1-3s | $50-70 |
 
-### API Usage
+### Environment Variables
 
-```python
-import requests
+Configure behavior via environment variables:
 
-# Upload image for diagnosis
-with open("plant_leaf.jpg", "rb") as f:
-    response = requests.post(
-        "http://localhost:7860/api/diagnose",
-        files={"image": f},
-        data={"climate": "Temperate"}
-    )
-
-result = response.json()
-print(f"Disease: {result['disease']}")
-print(f"Confidence: {result['confidence']}")
-print(f"Treatment: {result['treatment']}")
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GARDEN_DOCTOR_MOCK` | `true` | Set to `false` for production |
+| `GARDEN_DOCTOR_TIMEOUT` | `45` | Inference timeout in seconds |
+| `GARDEN_DOCTOR_4BIT` | `auto` | Quantization: `auto`, `true`, `false` |
+| `HEALTH_CHECK_ENABLED` | `true` | Enable `/health` endpoint |
 
 ---
 
-## 🌐 Deployment
+## 📊 Performance Metrics
 
-### Hugging Face Spaces
+| Metric | CPU Tier | GPU Tier |
+|--------|----------|----------|
+| Cold Start | 3-5 min | 1-2 min |
+| Warm Start | <10s | <5s |
+| Avg Inference | 15-25s | 2-5s |
+| Memory Usage | ~8GB | ~6GB VRAM |
+| Concurrent Users | 3-5 | 10-15 |
 
-This application is designed for deployment on Hugging Face Spaces:
+---
 
-1. Create a new Space on [Hugging Face](https://huggingface.co/new-space)
-2. Select "Gradio" as the SDK
-3. Upload all files to the Space:
-   - `app.py` - Main application
-   - `requirements.txt` - Dependencies
-   - `README.md` - This file (with YAML header)
-4. The Space will automatically build and deploy
+## ⚠️ Disclaimer
 
-### Hardware Requirements
+<div align="center">
 
-| Tier | RAM | Inference Time |
-|------|-----|----------------|
-| CPU (Free) | 16GB+ | 10-30 seconds |
-| GPU (T4) | 8GB VRAM | 2-5 seconds |
+**📋 IMPORTANT: This application provides informational guidance only.**
 
-### Environment Variables (Optional)
+</div>
 
-For advanced configuration, set these environment variables:
+**Garden Doctor is NOT a substitute for professional agricultural consultation.**
 
-```bash
-export HF_HOME=/path/to/cache  # Hugging Face cache directory
-export TRANSFORMERS_CACHE=/path/to/cache  # Transformers cache
-```
+### Limitations
+
+- Best results require clear, well-lit photographs of visible symptoms
+- The model may not detect early-stage or asymptomatic diseases
+- Limited to conditions represented in the PlantVillage training dataset
+- Unusual or rare plant diseases may not be correctly identified
+- Results with low confidence (<50%) should be treated as uncertain
+
+### Recommendations
+
+- **For critical crop decisions**: Consult a certified agronomist or agricultural extension service
+- **For commercial operations**: Verify diagnoses with laboratory testing
+- **For home gardening**: Use as a first-check tool before seeking expert advice
+
+**The developers assume no liability for actions taken based on this application's output.**
 
 ---
 
@@ -231,41 +337,39 @@ export TRANSFORMERS_CACHE=/path/to/cache  # Transformers cache
 
 ```
 GardenDoctor/
-├── app.py                 # Main Gradio application
-├── requirements.txt       # Python dependencies
-├── README.md              # This file
-├── .gitignore             # Git ignore patterns
+├── app.py                      # Main Gradio application (optimized for HF Spaces)
+├── requirements.txt            # Python dependencies
+├── README.md                   # This file (HF Spaces metadata header)
+├── space_config.yaml           # Detailed HF Spaces configuration
+├── .gitignore                  # Git ignore patterns
 ├── docs/
-│   └── Garden_Doctor_PRD.md   # Product Requirements Document
-└── examples/              # Example images for testing
-    ├── tomato_healthy.jpg
-    ├── potato_blight.jpg
-    └── ...
+│   ├── Garden_Doctor_PRD.md    # Product Requirements Document
+│   ├── TESTING_CHECKLIST.md    # Pre-launch testing checklist
+│   └── MONITORING_PLAN.md      # Post-launch monitoring plan
+├── examples/                   # Pre-loaded example images
+│   ├── tomato_healthy.jpg
+│   ├── tomato_early_blight.jpg
+│   ├── potato_late_blight.jpg
+│   ├── apple_scab.jpg
+│   ├── corn_rust.jpg
+│   └── grape_black_rot.jpg
+└── src/                        # Utility modules
+    ├── __init__.py
+    ├── prompts.py              # Prompt templates
+    └── utils.py                # Helper functions
 ```
 
 ---
 
-## 📊 Performance
+## 🤝 Contributing
 
-| Metric | Value |
-|--------|-------|
-| Model Accuracy (PlantVillage) | ~92% |
-| Supported Diseases | 38 |
-| Supported Plants | 14 |
-| Avg. Inference (CPU) | 15 seconds |
-| Avg. Inference (GPU) | 3 seconds |
+Contributions are welcome! Please feel free to submit a Pull Request.
 
----
-
-## ⚠️ Disclaimer
-
-This application provides **informational guidance only** and does not replace professional agricultural consultation. The AI model has known limitations:
-
-- Best results with clear, well-lit photographs
-- May not detect early-stage or rare diseases
-- Limited to conditions in the training dataset
-
-**Always consult a professional agronomist for critical crop decisions.**
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'feat: add AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ---
 
@@ -277,16 +381,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- **Model:** [YuchengShi/LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection](https://huggingface.co/YuchengShi/LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection)
-- **Dataset:** [PlantVillage Dataset](https://www.plantvillage.psu.edu/)
-- **Framework:** [Gradio](https://www.gradio.app/)
-- **Base Model:** [LLaVA](https://llava-vl.github.io/)
+| Resource | Attribution |
+|----------|-------------|
+| **AI Model** | [YuchengShi/LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection](https://huggingface.co/YuchengShi/LLaVA-v1.5-7B-Plant-Leaf-Diseases-Detection) |
+| **Training Dataset** | [PlantVillage Dataset](https://www.plantvillage.psu.edu/) by Penn State University |
+| **UI Framework** | [Gradio](https://www.gradio.app/) |
+| **Base Model** | [LLaVA](https://llava-vl.github.io/) - Large Language and Vision Assistant |
 
 ---
 
 <div align="center">
 
-**Made with 🌱 for gardeners everywhere**
+**Made with 🌱 for gardeners, farmers, and plant enthusiasts everywhere**
+
+*If this tool helped you, please consider giving it a ⭐!*
 
 [⬆ Back to Top](#-garden-doctor-plant-disease--care-assistant)
 
