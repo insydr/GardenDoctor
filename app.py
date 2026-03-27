@@ -4,6 +4,8 @@ An AI-powered plant disease detection and care recommendation application.
 
 This application uses a fine-tuned LLaVA vision-language model to identify
 plant diseases from leaf images and provide treatment recommendations.
+
+PRD Reference: Garden_Doctor_PRD.md Section 5.1 (Core Features)
 """
 
 import os
@@ -11,7 +13,7 @@ import re
 import time
 import logging
 from typing import Tuple, Optional, Dict, Any, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 import gradio as gr
@@ -46,25 +48,44 @@ MOCK_MODE = os.environ.get("GARDEN_DOCTOR_MOCK", "true").lower() == "true"
 # Image preprocessing configuration
 IMAGE_SIZE = 336
 
-# Confidence thresholds
-CONFIDENCE_THRESHOLD_LOW = 0.5
-CONFIDENCE_THRESHOLD_HIGH = 0.8
+# =============================================================================
+# Confidence Thresholds (PRD FR-4.1-4.4)
+# =============================================================================
+
+CONFIDENCE_LOW = 0.5      # Below this: show warning + quality tips
+CONFIDENCE_HIGH = 0.8     # Above this: show high confidence badge
 
 
 # =============================================================================
-# Climate Zone Configuration
+# Climate Zone Configuration (PRD FR-2.1-2.4)
 # =============================================================================
 
 CLIMATE_ZONES = {
-    "Tropical": "Hot, humid climate with year-round growing season (e.g., Southeast Asia, Central America)",
-    "Temperate": "Four distinct seasons with moderate humidity (e.g., Eastern US, Europe, East Asia)",
-    "Arid": "Hot, dry climate with low rainfall (e.g., Southwest US, Middle East, Australia)",
-    "Cold": "Short growing season with harsh winters (e.g., Northern Canada, Scandinavia, Russia)"
+    "Tropical": {
+        "description": "Hot, humid climate with year-round growing season",
+        "examples": "Southeast Asia, Central America, Caribbean",
+        "characteristics": "High humidity, frequent rainfall, warm temperatures"
+    },
+    "Temperate": {
+        "description": "Four distinct seasons with moderate humidity",
+        "examples": "Eastern US, Europe, East Asia",
+        "characteristics": "Seasonal variation, moderate rainfall, diverse crops"
+    },
+    "Arid": {
+        "description": "Hot, dry climate with low rainfall",
+        "examples": "Southwest US, Middle East, Australia",
+        "characteristics": "Low humidity, infrequent rain, irrigation needed"
+    },
+    "Cold": {
+        "description": "Short growing season with harsh winters",
+        "examples": "Northern Canada, Scandinavia, Russia",
+        "characteristics": "Cool summers, long winters, frost risk"
+    }
 }
 
 
 # =============================================================================
-# Color Scheme (from PRD Section 8)
+# Color Scheme (PRD Section 8.2)
 # =============================================================================
 
 COLORS = {
@@ -73,9 +94,8 @@ COLORS = {
     "background": "#F5F5DC",    # Off-White
     "accent": "#90EE90",        # Leaf Green
     "warning": "#FFBF00",       # Amber
-    "text_dark": "#1a1a2e",     # Dark text
-    "text_light": "#ffffff",    # Light text
-    "border": "#2d5a27",        # Dark green border
+    "error": "#DC143C",         # Crimson
+    "success": "#228B22",       # Green
 }
 
 
@@ -92,42 +112,106 @@ class ConfidenceLevel(Enum):
 
 @dataclass
 class DiagnosisResult:
-    """Structured diagnosis result."""
+    """
+    Structured diagnosis result.
+    
+    Attributes:
+        disease_name: Identified disease or "Healthy"
+        confidence_score: Numerical confidence (0.0-1.0)
+        confidence_level: HIGH/MEDIUM/LOW classification
+        symptoms: Description of visible symptoms
+        cause: Explanation of disease cause
+        treatment_cultural: Cultural practice treatments
+        treatment_organic: Organic/natural treatments
+        treatment_conventional: Chemical/conventional treatments
+        prevention: Preventive measures list
+        raw_response: Original model output
+        processing_time: Time taken for inference
+    """
     disease_name: str
     confidence_score: float
     confidence_level: ConfidenceLevel
-    explanation: str
-    treatment_steps: List[str]
-    prevention_tips: List[str]
-    raw_response: str
-    processing_time: float
+    symptoms: str = ""
+    cause: str = ""
+    treatment_cultural: List[str] = field(default_factory=list)
+    treatment_organic: List[str] = field(default_factory=list)
+    treatment_conventional: List[str] = field(default_factory=list)
+    prevention: List[str] = field(default_factory=list)
+    raw_response: str = ""
+    processing_time: float = 0.0
+    
+    def is_healthy(self) -> bool:
+        """Check if the diagnosis indicates a healthy plant."""
+        return "healthy" in self.disease_name.lower()
+    
+    def is_low_confidence(self) -> bool:
+        """Check if confidence is below threshold."""
+        return self.confidence_score < CONFIDENCE_LOW
+
+
+# =============================================================================
+# Image Quality Tips (PRD FR-4.2)
+# =============================================================================
+
+IMAGE_QUALITY_TIPS = """
+### 📷 Tips for Better Results
+
+To improve diagnosis accuracy, please ensure your image meets these criteria:
+
+1. **Good Lighting** - Take photos in natural daylight or bright, even lighting
+2. **Clear Focus** - Ensure the leaf is sharp and in focus
+3. **Close-up View** - Fill the frame with the leaf, showing symptoms clearly
+4. **Multiple Angles** - Try both sides of the leaf if symptoms are present
+5. **Clean Background** - Use a plain background to reduce distraction
+6. **Recent Photo** - Use fresh photos showing current symptoms
+
+**Common Issues:**
+- 🚫 Blurry or out-of-focus images
+- 🚫 Poor lighting (too dark or harsh shadows)
+- 🚫 Leaf too small in the frame
+- 🚫 Multiple leaves overlapping
+- 🚫 Non-plant objects in frame
+
+**Best Practices:**
+- ✅ Hold camera steady or use a tripod
+- ✅ Photograph in morning or late afternoon light
+- ✅ Include both healthy and affected areas if possible
+- ✅ Capture the most affected part of the leaf
+"""
 
 
 # =============================================================================
 # Prompt Template
 # =============================================================================
 
-DIAGNOSIS_PROMPT = """Analyze this plant leaf image for disease detection.
+DIAGNOSIS_PROMPT = """You are an expert plant pathologist. Analyze this plant leaf image for disease detection.
 
-Instructions:
-1. Identify the plant species if possible
-2. Determine if the leaf is healthy or diseased
-3. If diseased, identify the specific disease name
-4. Provide a confidence level (High/Medium/Low)
-5. Describe visible symptoms
-6. Explain the cause of the condition
-7. Provide treatment recommendations for {climate} climate
-8. Suggest prevention measures
+Please provide your analysis in this EXACT format:
 
-Please format your response as follows:
-DISEASE: [disease name or "Healthy"]
+DISEASE: [disease name or "Healthy Plant"]
 CONFIDENCE: [High/Medium/Low]
-SYMPTOMS: [description of visible symptoms]
+SYMPTOMS: [detailed description of visible symptoms]
 CAUSE: [explanation of what causes this condition]
-TREATMENT: [numbered list of treatment steps for {climate} climate]
-PREVENTION: [bullet points for prevention tips]
 
-Consider that this plant is growing in a {climate} climate zone when providing recommendations."""
+CULTURAL_TREATMENTS:
+1. [first cultural practice treatment]
+2. [second cultural practice treatment]
+3. [third cultural practice treatment if applicable]
+
+ORGANIC_TREATMENTS:
+1. [first organic treatment option]
+2. [second organic treatment option]
+
+CONVENTIONAL_TREATMENTS:
+1. [first conventional/chemical treatment]
+2. [second conventional/chemical treatment]
+
+PREVENTION:
+• [first prevention measure for {climate} climate]
+• [second prevention measure]
+• [third prevention measure]
+
+Consider that this plant is growing in a {climate} climate zone. Provide practical, actionable advice appropriate for that climate's conditions."""
 
 
 # =============================================================================
@@ -188,7 +272,7 @@ class ModelManager:
             return False
     
     def preprocess_image(self, image: Image.Image) -> Image.Image:
-        """Preprocess image for model input."""
+        """Preprocess image for model input (336x336, RGB)."""
         if image.mode != "RGB":
             image = image.convert("RGB")
         
@@ -197,25 +281,37 @@ class ModelManager:
         
         return image
     
-    def generate_response(self, image: Image.Image, prompt: str, max_new_tokens: int = 512) -> str:
+    def generate_response(self, image: Image.Image, prompt: str, max_new_tokens: int = 768) -> str:
         """Generate model response for an image and prompt."""
         if self.mock_mode:
             return self._generate_mock_response(prompt)
         
         if not self.is_loaded:
-            raise RuntimeError("Model not loaded.")
+            raise RuntimeError("Model not loaded. Call load_model() first.")
         
-        conversation = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}]
-        text_prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
-        inputs = self.processor(text=text_prompt, images=image, return_tensors="pt")
-        inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-        
-        with torch.no_grad():
-            output = self.model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
-        
-        generated_text = self.processor.decode(output[0], skip_special_tokens=True)
-        response = generated_text.split("[/INST]")[-1].strip() if "[/INST]" in generated_text else generated_text.strip()
-        return response
+        try:
+            conversation = [
+                {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}
+            ]
+            text_prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
+            inputs = self.processor(text=text_prompt, images=image, return_tensors="pt")
+            inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
+            
+            with torch.no_grad():
+                output = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=False,
+                    pad_token_id=self.processor.tokenizer.eos_token_id,
+                )
+            
+            generated_text = self.processor.decode(output[0], skip_special_tokens=True)
+            response = generated_text.split("[/INST]")[-1].strip() if "[/INST]" in generated_text else generated_text.strip()
+            return response
+            
+        except Exception as e:
+            logger.error(f"Inference error: {str(e)}")
+            raise
     
     def _generate_mock_response(self, prompt: str) -> str:
         """Generate mock response for testing."""
@@ -227,126 +323,311 @@ class ModelManager:
         
         return f"""DISEASE: Early Blight
 CONFIDENCE: High
-SYMPTOMS: Dark brown circular spots with concentric rings forming target-like patterns on the leaves. Yellowing of leaf tissue around the infected areas. Lesions may merge causing large dead patches on affected leaves.
-CAUSE: Early blight is caused by the fungus Alternaria solani. The pathogen survives in infected plant debris and soil. It thrives in warm, humid conditions with temperatures between 24-29°C (75-84°F). The disease spreads through wind-borne spores and water splash.
-TREATMENT: 
-1. Remove and destroy all infected leaves immediately to prevent further spread of the disease
-2. Apply copper-based fungicide or chlorothalonil every 7-10 days during active growth
-3. Improve air circulation around plants by proper spacing and removing lower leaves
-4. Water at the base of plants early in the day to keep foliage dry
-5. For {climate} climate, monitor plants closely during warm humid periods and apply preventive fungicides
-PREVENTION: 
-• Use disease-resistant tomato and potato varieties when available
-• Practice 3-4 year crop rotation avoiding solanaceous crops
-• Remove and destroy all plant debris at end of growing season
-• Maintain adequate plant spacing (24-36 inches) for air circulation
+SYMPTOMS: Dark brown circular spots with concentric rings forming distinctive target-like patterns on the leaves. Yellowing of leaf tissue around the infected areas, starting from the lower leaves. Lesions may merge together creating large dead patches. In severe cases, premature defoliation occurs.
+CAUSE: Early blight is caused by the fungus Alternaria solani. The pathogen survives in infected plant debris and soil for up to a year. It thrives in warm, humid conditions with temperatures between 24-29°C (75-84°F) and high moisture levels. The disease spreads through wind-borne spores, water splash, and contaminated tools.
+
+CULTURAL_TREATMENTS:
+1. Remove and destroy all infected leaves immediately to prevent spore spread
+2. Improve air circulation by proper plant spacing (24-36 inches apart) and staking plants
+3. Water at the base of plants early in the day to keep foliage dry
+
+ORGANIC_TREATMENTS:
+1. Apply copper-based fungicide every 7-10 days during active disease period
+2. Use neem oil spray as a natural fungicide alternative
+
+CONVENTIONAL_TREATMENTS:
+1. Apply chlorothalonil or mancozeb fungicide according to label instructions
+2. Use systemic fungicides containing azoxystrobin for severe infections
+
+PREVENTION:
+• Use disease-resistant varieties such as 'Mountain Magic' or 'Defiant' for {climate} conditions
+• Practice 3-4 year crop rotation avoiding tomatoes, potatoes, and eggplant
+• Remove all plant debris at end of season and destroy or hot compost
 • Apply organic mulch to prevent soil splash onto lower leaves
-• Use drip irrigation or soaker hoses instead of overhead watering"""
+• Monitor plants weekly during warm humid weather in {climate} climate"""
 
 
 # =============================================================================
 # Diagnosis Functions
 # =============================================================================
 
+def parse_confidence_level(confidence_str: str) -> Tuple[ConfidenceLevel, float]:
+    """
+    Parse confidence string to level and score.
+    
+    Args:
+        confidence_str: Confidence string from model (High/Medium/Low)
+        
+    Returns:
+        Tuple of (ConfidenceLevel, numerical_score)
+    """
+    confidence_map = {
+        "high": (ConfidenceLevel.HIGH, 0.88),
+        "medium": (ConfidenceLevel.MEDIUM, 0.65),
+        "low": (ConfidenceLevel.LOW, 0.42),
+        "moderate": (ConfidenceLevel.MEDIUM, 0.65),
+    }
+    return confidence_map.get(confidence_str.lower(), (ConfidenceLevel.MEDIUM, 0.60))
+
+
 def parse_diagnosis_response(response: str, processing_time: float) -> DiagnosisResult:
-    """Parse model response into structured diagnosis result."""
+    """
+    Parse model response into structured diagnosis result.
+    
+    Args:
+        response: Raw model response text
+        processing_time: Time taken for inference
+        
+    Returns:
+        Structured DiagnosisResult
+    """
+    # Default values
     disease_name = "Unknown"
     confidence_score = 0.5
     confidence_level = ConfidenceLevel.MEDIUM
-    explanation = ""
-    treatment_steps = []
-    prevention_tips = []
+    symptoms = ""
+    cause = ""
+    treatment_cultural = []
+    treatment_organic = []
+    treatment_conventional = []
+    prevention = []
     
     # Extract disease name
     disease_match = re.search(r"DISEASE:\s*(.+?)(?:\n|$)", response, re.IGNORECASE)
     if disease_match:
         disease_name = disease_match.group(1).strip()
     
-    # Extract confidence
-    confidence_match = re.search(r"CONFIDENCE:\s*(High|Medium|Low)", response, re.IGNORECASE)
+    # Extract and parse confidence
+    confidence_match = re.search(r"CONFIDENCE:\s*(High|Medium|Low|Moderate)", response, re.IGNORECASE)
     if confidence_match:
-        conf_str = confidence_match.group(1).strip().capitalize()
-        confidence_level = ConfidenceLevel(conf_str)
-        confidence_score = {"High": 0.85, "Medium": 0.65, "Low": 0.40}[conf_str]
+        conf_str = confidence_match.group(1).strip()
+        confidence_level, confidence_score = parse_confidence_level(conf_str)
     
-    # Extract symptoms and cause
-    symptoms_match = re.search(r"SYMPTOMS:\s*(.+?)(?=CAUSE:|$)", response, re.IGNORECASE | re.DOTALL)
-    cause_match = re.search(r"CAUSE:\s*(.+?)(?=TREATMENT:|$)", response, re.IGNORECASE | re.DOTALL)
-    
-    explanation_parts = []
+    # Extract symptoms
+    symptoms_match = re.search(r"SYMPTOMS:\s*(.+?)(?=CAUSE:|CULTURAL|TREATMENT|$)", response, re.IGNORECASE | re.DOTALL)
     if symptoms_match:
-        explanation_parts.append(f"**Symptoms:** {symptoms_match.group(1).strip()}")
-    if cause_match:
-        explanation_parts.append(f"**Cause:** {cause_match.group(1).strip()}")
-    explanation = "\n\n".join(explanation_parts)
+        symptoms = symptoms_match.group(1).strip()
     
-    # Extract treatment steps
-    treatment_match = re.search(r"TREATMENT:\s*(.+?)(?=PREVENTION:|$)", response, re.IGNORECASE | re.DOTALL)
-    if treatment_match:
-        treatment_text = treatment_match.group(1).strip()
-        treatment_steps = [step.strip() for step in re.findall(r"\d+\.\s*(.+?)(?=\n\d+\.|$)", treatment_text, re.DOTALL)]
-        if not treatment_steps:
-            treatment_steps = [line.strip().lstrip("0123456789. ") for line in treatment_text.split("\n") if line.strip()]
+    # Extract cause
+    cause_match = re.search(r"CAUSE:\s*(.+?)(?=CULTURAL|ORGANIC|CONVENTIONAL|TREATMENT|PREVENTION|$)", response, re.IGNORECASE | re.DOTALL)
+    if cause_match:
+        cause = cause_match.group(1).strip()
+    
+    # Extract cultural treatments
+    cultural_match = re.search(r"CULTURAL_TREATMENTS?:\s*(.+?)(?=ORGANIC|CONVENTIONAL|PREVENTION|$)", response, re.IGNORECASE | re.DOTALL)
+    if cultural_match:
+        cultural_text = cultural_match.group(1).strip()
+        treatment_cultural = [
+            step.strip().lstrip("0123456789. ")
+            for step in re.findall(r"\d+\.\s*(.+?)(?=\n\d+\.|$)", cultural_text, re.DOTALL)
+        ]
+        if not treatment_cultural:
+            treatment_cultural = [line.strip().lstrip("0123456789.•- ") 
+                                  for line in cultural_text.split("\n") if line.strip()]
+    
+    # Extract organic treatments
+    organic_match = re.search(r"ORGANIC_TREATMENTS?:\s*(.+?)(?=CONVENTIONAL|PREVENTION|$)", response, re.IGNORECASE | re.DOTALL)
+    if organic_match:
+        organic_text = organic_match.group(1).strip()
+        treatment_organic = [
+            step.strip().lstrip("0123456789. ")
+            for step in re.findall(r"\d+\.\s*(.+?)(?=\n\d+\.|$)", organic_text, re.DOTALL)
+        ]
+        if not treatment_organic:
+            treatment_organic = [line.strip().lstrip("0123456789.•- ") 
+                                 for line in organic_text.split("\n") if line.strip()]
+    
+    # Extract conventional treatments
+    conventional_match = re.search(r"CONVENTIONAL_TREATMENTS?:\s*(.+?)(?=PREVENTION|$)", response, re.IGNORECASE | re.DOTALL)
+    if conventional_match:
+        conventional_text = conventional_match.group(1).strip()
+        treatment_conventional = [
+            step.strip().lstrip("0123456789. ")
+            for step in re.findall(r"\d+\.\s*(.+?)(?=\n\d+\.|$)", conventional_text, re.DOTALL)
+        ]
+        if not treatment_conventional:
+            treatment_conventional = [line.strip().lstrip("0123456789.•- ") 
+                                      for line in conventional_text.split("\n") if line.strip()]
+    
+    # Fallback: Try to parse from general TREATMENT section if specific categories not found
+    if not (treatment_cultural or treatment_organic or treatment_conventional):
+        treatment_match = re.search(r"TREATMENT:\s*(.+?)(?=PREVENTION|$)", response, re.IGNORECASE | re.DOTALL)
+        if treatment_match:
+            treatment_text = treatment_match.group(1).strip()
+            all_treatments = [
+                step.strip().lstrip("0123456789. ")
+                for step in re.findall(r"\d+\.\s*(.+?)(?=\n\d+\.|$)", treatment_text, re.DOTALL)
+            ]
+            # Distribute into categories
+            treatment_cultural = all_treatments[:2] if len(all_treatments) > 0 else []
+            treatment_organic = all_treatments[2:4] if len(all_treatments) > 2 else []
+            treatment_conventional = all_treatments[4:] if len(all_treatments) > 4 else []
     
     # Extract prevention tips
     prevention_match = re.search(r"PREVENTION:\s*(.+?)$", response, re.IGNORECASE | re.DOTALL)
     if prevention_match:
         prevention_text = prevention_match.group(1).strip()
-        prevention_tips = [tip.strip().lstrip("• ") for tip in prevention_text.split("\n") if tip.strip()]
+        prevention = [tip.strip().lstrip("• ") for tip in prevention_text.split("\n") if tip.strip()]
     
     return DiagnosisResult(
         disease_name=disease_name,
         confidence_score=confidence_score,
         confidence_level=confidence_level,
-        explanation=explanation,
-        treatment_steps=treatment_steps,
-        prevention_tips=prevention_tips,
+        symptoms=symptoms,
+        cause=cause,
+        treatment_cultural=treatment_cultural,
+        treatment_organic=treatment_organic,
+        treatment_conventional=treatment_conventional,
+        prevention=prevention,
         raw_response=response,
         processing_time=processing_time
     )
 
 
+def get_confidence_interpretation(score: float) -> str:
+    """
+    Get confidence interpretation text.
+    
+    Args:
+        score: Confidence score (0.0-1.0)
+        
+    Returns:
+        Interpretation string
+    """
+    if score >= CONFIDENCE_HIGH:
+        return "🟢 **High confidence** - Results are reliable"
+    elif score >= CONFIDENCE_LOW:
+        return "🟡 **Moderate confidence** - Consider consulting additional resources"
+    else:
+        return "🔴 **Low confidence** - Please try with a clearer image"
+
+
 def format_diagnosis_report(diagnosis: DiagnosisResult, climate: str) -> str:
-    """Format diagnosis result as markdown report."""
+    """
+    Format diagnosis result as markdown report per PRD Section 5.1.
+    
+    Args:
+        diagnosis: Structured diagnosis result
+        climate: Selected climate zone
+        
+    Returns:
+        Formatted markdown string
+    """
     sections = []
     
-    # Header with status icon
-    if "healthy" in diagnosis.disease_name.lower():
-        sections.append("## ✅ Great News! Your Plant Appears Healthy\n")
+    # ==========================================================================
+    # Header with Diagnosis (PRD FR-3.1, FR-3.2)
+    # ==========================================================================
+    
+    if diagnosis.is_healthy():
+        sections.append("### 🩺 Diagnosis: Healthy Plant")
+        sections.append("")
+        sections.append("Great news! Your plant appears to be **healthy** with no detectable disease symptoms.")
     else:
-        sections.append("## 🔬 Disease Identified\n")
-        sections.append(f"### **{diagnosis.disease_name}**\n")
+        sections.append(f"### 🩺 Diagnosis: {diagnosis.disease_name}")
     
-    # Confidence indicator
-    confidence_emoji = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}
-    sections.append(f"**Confidence Level:** {confidence_emoji.get(diagnosis.confidence_level.value, '⚪')} {diagnosis.confidence_level.value} ({diagnosis.confidence_score:.0%})")
-    sections.append(f"**Climate Zone:** {climate}")
+    sections.append("")
+    
+    # ==========================================================================
+    # Confidence with Interpretation (PRD FR-3.2, FR-4.1-4.4)
+    # ==========================================================================
+    
+    confidence_interp = get_confidence_interpretation(diagnosis.confidence_score)
+    sections.append(f"**Confidence:** {diagnosis.confidence_score:.1%} — {confidence_interp}")
+    sections.append(f"**Climate:** {climate}")
     sections.append(f"**Analysis Time:** {diagnosis.processing_time:.1f}s")
-    sections.append("\n---\n")
+    sections.append("")
     
-    # Explanation
-    if diagnosis.explanation:
-        sections.append("### 📋 Details\n")
-        sections.append(diagnosis.explanation)
+    # ==========================================================================
+    # Low Confidence Warning (PRD FR-4.1-4.4)
+    # ==========================================================================
+    
+    if diagnosis.confidence_score < CONFIDENCE_LOW:
+        sections.append("---")
+        sections.append("### ⚠️ Low Confidence Warning")
+        sections.append("")
+        sections.append("The AI model is **not confident** in this diagnosis. This could mean:")
+        sections.append("- The image quality is insufficient")
+        sections.append("- The plant species is not in the training data")
+        sections.append("- The disease symptoms are not clearly visible")
+        sections.append("")
+        sections.append(IMAGE_QUALITY_TIPS)
+        sections.append("---")
         sections.append("")
     
-    # Treatment steps
-    if diagnosis.treatment_steps:
-        sections.append("### 💊 Treatment Recommendations\n")
-        for i, step in enumerate(diagnosis.treatment_steps, 1):
-            sections.append(f"**{i}.** {step}")
+    # ==========================================================================
+    # Moderate Confidence Note (PRD FR-4.2)
+    # ==========================================================================
+    
+    if CONFIDENCE_LOW <= diagnosis.confidence_score < CONFIDENCE_HIGH:
+        sections.append("> 💡 **Note:** This diagnosis has moderate confidence. For critical decisions, consider consulting a professional agronomist or your local agricultural extension service.")
         sections.append("")
     
-    # Prevention tips
-    if diagnosis.prevention_tips:
-        sections.append("### 🛡️ Prevention Tips\n")
-        for tip in diagnosis.prevention_tips:
-            sections.append(f"• {tip}")
+    # ==========================================================================
+    # What is this? / Explanation (PRD FR-3.3)
+    # ==========================================================================
+    
+    if diagnosis.symptoms or diagnosis.cause:
+        sections.append("### 🔍 What is this?")
+        sections.append("")
+        
+        if diagnosis.symptoms:
+            sections.append("**Symptoms Observed:**")
+            sections.append(diagnosis.symptoms)
+            sections.append("")
+        
+        if diagnosis.cause:
+            sections.append("**Cause:**")
+            sections.append(diagnosis.cause)
+            sections.append("")
+    
+    # ==========================================================================
+    # Treatment Options (PRD FR-3.4)
+    # ==========================================================================
+    
+    if not diagnosis.is_healthy():
+        sections.append("### 🌱 Treatment Options")
+        sections.append("")
+        
+        # Cultural Practices
+        if diagnosis.treatment_cultural:
+            sections.append("**Cultural Practices:**")
+            for step in diagnosis.treatment_cultural:
+                sections.append(f"- {step}")
+            sections.append("")
+        
+        # Organic Treatments
+        if diagnosis.treatment_organic:
+            sections.append("**Organic Treatments:**")
+            for step in diagnosis.treatment_organic:
+                sections.append(f"- {step}")
+            sections.append("")
+        
+        # Conventional Options
+        if diagnosis.treatment_conventional:
+            sections.append("**Conventional Options:**")
+            for step in diagnosis.treatment_conventional:
+                sections.append(f"- {step}")
+            sections.append("")
+    
+    # ==========================================================================
+    # Prevention (PRD FR-3.5)
+    # ==========================================================================
+    
+    if diagnosis.prevention:
+        sections.append(f"### 🛡️ Prevention for {climate} Climate")
+        sections.append("")
+        for tip in diagnosis.prevention:
+            sections.append(f"- {tip}")
         sections.append("")
     
-    # Footer disclaimer
-    sections.append("---\n")
-    sections.append("*⚠️ This diagnosis is for informational purposes only. For serious plant health issues, please consult a professional agronomist or your local agricultural extension service.*")
+    # ==========================================================================
+    # Footer Disclaimer (PRD FR-3.6)
+    # ==========================================================================
+    
+    sections.append("---")
+    sections.append("")
+    sections.append("*⚠️ This diagnosis is for informational purposes only and does not replace professional agricultural consultation. For serious plant health issues, please consult a professional agronomist or your local agricultural extension service.*")
     
     return "\n".join(sections)
 
@@ -358,7 +639,14 @@ def diagnose_plant(
     progress=gr.Progress()
 ) -> Tuple[Dict[str, float], str]:
     """
-    Process a plant image and generate diagnosis with progress updates.
+    Process a plant image and generate diagnosis.
+    
+    This function implements the complete diagnosis pipeline:
+    1. Validate input image (PRD FR-1.1-1.3)
+    2. Preprocess image to 336x336 (PRD NFR-1.1)
+    3. Generate diagnosis with progress tracking
+    4. Parse and format results (PRD FR-3.1-3.6)
+    5. Apply confidence threshold logic (PRD FR-4.1-4.4)
     
     Args:
         image: PIL Image of the plant leaf
@@ -369,51 +657,79 @@ def diagnose_plant(
     Returns:
         Tuple of (confidence_dict, formatted_report)
     """
+    # ==========================================================================
+    # Input Validation (PRD FR-1.1)
+    # ==========================================================================
+    
     if image is None:
-        return {}, "⚠️ **Please upload a leaf image to diagnose.**\n\nUpload a clear, well-lit photo of the affected leaf for best results."
+        empty_label = {}
+        empty_report = """### ⚠️ No Image Provided
+
+Please upload a leaf image to diagnose.
+
+**Supported formats:** JPEG, PNG, WebP
+**Tips:** Use a clear, well-lit photo of the affected leaf for best results."""
+        return empty_label, empty_report
     
     try:
-        progress(0.1, desc="📷 Processing image...")
+        # ======================================================================
+        # Image Preprocessing (PRD NFR-1.1)
+        # ======================================================================
         
-        # Preprocess image
+        progress(0.1, desc="📷 Processing image...")
+        logger.info(f"Processing image: {image.size}, mode: {image.mode}")
+        
+        # Convert to RGB and resize
         processed_image = model_manager.preprocess_image(image)
         
-        progress(0.2, desc="🤖 Analyzing with AI model...")
+        # ======================================================================
+        # Model Inference
+        # ======================================================================
         
-        # Start timing
+        progress(0.2, desc="🤖 Loading AI model...")
+        
         start_time = time.time()
         
-        # Construct prompt
+        # Construct prompt with climate
         prompt = DIAGNOSIS_PROMPT.format(climate=climate)
         
-        progress(0.4, desc="🔍 Detecting plant disease...")
+        progress(0.3, desc="🔍 Analyzing leaf patterns...")
         
         # Generate response
         response = model_manager.generate_response(processed_image, prompt)
         
-        progress(0.7, desc="📊 Generating diagnosis report...")
+        progress(0.7, desc="📊 Processing diagnosis...")
         
         # Calculate processing time
         processing_time = time.time() - start_time
         
-        # Parse response
+        # ======================================================================
+        # Parse Response
+        # ======================================================================
+        
         diagnosis = parse_diagnosis_response(response, processing_time)
         
-        progress(0.9, desc="✅ Finalizing results...")
+        logger.info(f"Diagnosis: {diagnosis.disease_name} ({diagnosis.confidence_level.value}, {diagnosis.confidence_score:.0%}) in {processing_time:.2f}s")
         
-        # Format output
+        progress(0.9, desc="📝 Formatting report...")
+        
+        # ======================================================================
+        # Format Output (PRD FR-3.1-3.6)
+        # ======================================================================
+        
+        # Confidence label (PRD FR-3.1)
         confidence_dict = {diagnosis.disease_name: diagnosis.confidence_score}
+        
+        # Format markdown report (PRD FR-3.2-3.6)
         formatted_report = format_diagnosis_report(diagnosis, climate)
         
-        progress(1.0, desc="Done!")
-        
-        logger.info(f"Diagnosis completed in {processing_time:.2f}s: {diagnosis.disease_name}")
+        progress(1.0, desc="✅ Done!")
         
         return confidence_dict, formatted_report
         
     except Exception as e:
-        error_msg = f"❌ **Error processing image:** {str(e)}\n\nPlease try again with a different image."
-        logger.error(f"Diagnosis error: {str(e)}")
+        error_msg = f"### ❌ Error Processing Image\n\nAn error occurred during diagnosis:\n\n```\n{str(e)}\n```\n\nPlease try again with a different image."
+        logger.error(f"Diagnosis error: {str(e)}", exc_info=True)
         return {}, error_msg
 
 
@@ -425,13 +741,13 @@ CUSTOM_CSS = """
 /* Base styles */
 .gradio-container {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-    background: linear-gradient(135deg, #f5f5dc 0%, #e8f5e9 100%) !important;
+    background: linear-gradient(135deg, #F5F5DC 0%, #e8f5e9 100%) !important;
 }
 
 /* Header styling */
 .app-header {
     text-align: center;
-    padding: 20px;
+    padding: 25px;
     margin-bottom: 20px;
     background: linear-gradient(135deg, #228B22 0%, #2d5a27 100%);
     border-radius: 15px;
@@ -441,7 +757,7 @@ CUSTOM_CSS = """
 
 .app-header h1 {
     margin: 0;
-    font-size: 2.5em;
+    font-size: 2.2em;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
 }
 
@@ -500,8 +816,8 @@ CUSTOM_CSS = """
 }
 
 /* Dropdown styling */
-.climate-dropdown {
-    border-radius: 10px !important;
+.climate-dropdown label {
+    font-weight: 600;
 }
 
 /* Label output styling */
@@ -513,11 +829,20 @@ CUSTOM_CSS = """
 }
 
 /* Markdown output styling */
-.diagnosis-output {
-    background: white;
-    border-radius: 15px;
-    padding: 20px;
-    border: 2px solid #e8f5e9;
+.diagnosis-output h3 {
+    color: #228B22;
+    border-bottom: 2px solid #90EE90;
+    padding-bottom: 8px;
+    margin-top: 15px;
+}
+
+.diagnosis-output h4 {
+    color: #2d5a27;
+}
+
+/* Warning box styling */
+.diagnosis-output h3:contains("Warning") {
+    color: #FFBF00;
 }
 
 /* Examples gallery */
@@ -527,17 +852,6 @@ CUSTOM_CSS = """
     padding: 20px;
     margin-top: 20px;
     border: 2px solid #90EE90;
-}
-
-/* Footer styling */
-.app-footer {
-    text-align: center;
-    padding: 15px;
-    margin-top: 20px;
-    background: #f5f5dc;
-    border-radius: 10px;
-    font-size: 0.9em;
-    color: #666;
 }
 
 /* Status indicator */
@@ -554,15 +868,48 @@ CUSTOM_CSS = """
     color: #228B22;
 }
 
-.status-loading {
+.status-mock {
     background: #FFBF00;
     color: #8B4513;
+}
+
+/* Confidence badges */
+.high-confidence {
+    background: #90EE90;
+    color: #228B22;
+    padding: 3px 10px;
+    border-radius: 5px;
+}
+
+.medium-confidence {
+    background: #FFF3CD;
+    color: #856404;
+    padding: 3px 10px;
+    border-radius: 5px;
+}
+
+.low-confidence {
+    background: #F8D7DA;
+    color: #721C24;
+    padding: 3px 10px;
+    border-radius: 5px;
+}
+
+/* Footer styling */
+.app-footer {
+    text-align: center;
+    padding: 15px;
+    margin-top: 20px;
+    background: #F5F5DC;
+    border-radius: 10px;
+    font-size: 0.9em;
+    color: #666;
 }
 
 /* Responsive design */
 @media (max-width: 768px) {
     .app-header h1 {
-        font-size: 1.8em;
+        font-size: 1.6em;
     }
     
     .input-card, .output-card {
@@ -573,17 +920,6 @@ CUSTOM_CSS = """
 /* Hide default footer */
 footer {
     display: none !important;
-}
-
-/* Loading animation */
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-
-.loading {
-    animation: pulse 1.5s ease-in-out infinite;
 }
 """
 
@@ -613,13 +949,14 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
         gr.HTML("""
         <div class="app-header">
             <h1>🌿 Garden Doctor AI</h1>
-            <p>Your intelligent plant health assistant - Upload a leaf photo for instant disease diagnosis and care recommendations</p>
+            <p>Your intelligent plant health assistant — Upload a leaf photo for instant disease diagnosis</p>
         </div>
         """)
         
         # Status indicator
-        status_text = "🔧 Mock Mode (Testing)" if model_manager.mock_mode else f"✅ Ready ({DEVICE.upper()})"
-        gr.HTML(f'<div style="text-align: center; margin-bottom: 15px;"><span class="status-indicator status-ready">{status_text}</span></div>')
+        mode_class = "status-mock" if model_manager.mock_mode else "status-ready"
+        mode_text = "🔧 Mock Mode (Testing)" if model_manager.mock_mode else f"✅ Ready ({DEVICE.upper()})"
+        gr.HTML(f'<div style="text-align: center; margin-bottom: 15px;"><span class="status-indicator {mode_class}">{mode_text}</span></div>')
         
         # =====================================================================
         # Main Content - Two Column Layout
@@ -628,7 +965,7 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
         with gr.Row(equal_height=True):
             
             # -----------------------------------------------------------------
-            # LEFT COLUMN - Input Section
+            # LEFT COLUMN - Input Section (PRD Section 8.3)
             # -----------------------------------------------------------------
             
             with gr.Column(scale=1, min_width=300):
@@ -650,7 +987,6 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
                 gr.Markdown("")
                 
                 gr.Markdown("### 🌍 Select Your Climate Zone")
-                gr.Markdown("*Choose your growing region for tailored recommendations*")
                 
                 climate_input = gr.Dropdown(
                     choices=list(CLIMATE_ZONES.keys()),
@@ -660,14 +996,15 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
                     elem_classes=["climate-dropdown"]
                 )
                 
-                # Climate description display
+                # Climate description display (PRD FR-2.2)
                 climate_info = gr.Markdown(
-                    value=f"*{CLIMATE_ZONES['Temperate']}*",
+                    value=f"**{CLIMATE_ZONES['Temperate']['description']}**\n\n*Examples: {CLIMATE_ZONES['Temperate']['examples']}*",
                     elem_classes=["climate-info"]
                 )
                 
                 def update_climate_info(climate):
-                    return f"*{CLIMATE_ZONES.get(climate, '')}*"
+                    info = CLIMATE_ZONES.get(climate, CLIMATE_ZONES["Temperate"])
+                    return f"**{info['description']}**\n\n*Examples: {info['examples']}*"
                 
                 climate_input.change(
                     fn=update_climate_info,
@@ -696,7 +1033,7 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
                 gr.HTML('</div>')
             
             # -----------------------------------------------------------------
-            # RIGHT COLUMN - Output Section
+            # RIGHT COLUMN - Output Section (PRD Section 8.3)
             # -----------------------------------------------------------------
             
             with gr.Column(scale=1, min_width=300):
@@ -705,6 +1042,7 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
                 
                 gr.Markdown("### 📊 Diagnosis Results")
                 
+                # Confidence label (PRD FR-3.1)
                 confidence_output = gr.Label(
                     label="Disease Confidence",
                     num_top_classes=3,
@@ -714,6 +1052,7 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
                 
                 gr.Markdown("")
                 
+                # Diagnosis report (PRD FR-3.2-3.6)
                 diagnosis_output = gr.Markdown(
                     value="*Upload an image and click **Diagnose** to see results...*",
                     label="Diagnosis Report",
@@ -723,7 +1062,7 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
                 gr.HTML('</div>')
         
         # =====================================================================
-        # Examples Gallery Section
+        # Examples Gallery (PRD Feature 5)
         # =====================================================================
         
         gr.Markdown("")
@@ -735,12 +1074,12 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
         
         gr.Examples(
             examples=[
-                ["examples/tomato_healthy.jpg", "Temperate", "Healthy Tomato Leaf"],
-                ["examples/tomato_early_blight.jpg", "Temperate", "Tomato Early Blight"],
-                ["examples/potato_late_blight.jpg", "Temperate", "Potato Late Blight"],
-                ["examples/apple_scab.jpg", "Temperate", "Apple Scab"],
-                ["examples/corn_rust.jpg", "Tropical", "Corn Common Rust"],
-                ["examples/grape_black_rot.jpg", "Tropical", "Grape Black Rot"],
+                ["examples/tomato_healthy.jpg", "Temperate"],
+                ["examples/tomato_early_blight.jpg", "Temperate"],
+                ["examples/potato_late_blight.jpg", "Temperate"],
+                ["examples/apple_scab.jpg", "Temperate"],
+                ["examples/corn_rust.jpg", "Tropical"],
+                ["examples/grape_black_rot.jpg", "Tropical"],
             ],
             inputs=[image_input, climate_input],
             label="Example Plant Images",
@@ -773,18 +1112,26 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
         """)
         
         # =====================================================================
-        # Event Handlers
+        # Event Handlers (PRD Section 5.1)
         # =====================================================================
         
         def on_diagnose(image, climate, progress=gr.Progress()):
-            """Handle diagnose button click with progress."""
+            """
+            Handle diagnose button click.
+            
+            Implements PRD FR-1.1-1.6, FR-3.1-3.6, FR-4.1-4.4
+            """
             return diagnose_plant(image, climate, model_manager, progress)
         
         def on_clear():
             """Handle clear button click."""
-            return None, {}, "*Upload an image and click **Diagnose** to see results...*"
+            return (
+                None,  # Clear image
+                {},    # Clear confidence label
+                "*Upload an image and click **Diagnose** to see results...*"  # Reset markdown
+            )
         
-        # Connect event handlers
+        # Wire Diagnose button to inference pipeline
         diagnose_btn.click(
             fn=on_diagnose,
             inputs=[image_input, climate_input],
@@ -792,6 +1139,7 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
             api_name="diagnose"
         )
         
+        # Wire Clear button
         clear_btn.click(
             fn=on_clear,
             outputs=[image_input, confidence_output, diagnosis_output]
@@ -815,6 +1163,7 @@ def main():
     print(f"Model: {MODEL_ID}")
     print(f"Device: {DEVICE}")
     print(f"Mock Mode: {MOCK_MODE}")
+    print(f"Confidence Thresholds: Low < {CONFIDENCE_LOW}, High >= {CONFIDENCE_HIGH}")
     print("=" * 60)
     
     # Initialize model manager
