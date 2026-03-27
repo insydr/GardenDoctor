@@ -347,9 +347,11 @@ def create_interface() -> gr.Blocks:
         gr.Examples(
             examples=[
                 ["examples/tomato_healthy.jpg", "Temperate"],
+                ["examples/tomato_early_blight.jpg", "Temperate"],
                 ["examples/potato_late_blight.jpg", "Temperate"],
                 ["examples/apple_scab.jpg", "Temperate"],
                 ["examples/corn_rust.jpg", "Tropical"],
+                ["examples/grape_black_rot.jpg", "Tropical"],
             ],
             inputs=[image_input, climate_input],
             label="Example Plant Images"

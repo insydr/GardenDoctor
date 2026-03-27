@@ -147,9 +147,9 @@ datasets/
 # Project Specific
 # =============================================================================
 
-# Example images (if large)
-examples/*.jpg
-examples/*.png
+# Example images (large files only - keep small examples for testing)
+# examples/*.jpg
+# examples/*.png
 !examples/.gitkeep
 
 # Generated reports
