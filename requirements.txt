@@ -11,7 +11,6 @@ gradio==4.44.0
 # Machine Learning - Core
 # =============================================================================
 # PyTorch - CPU version (default for Hugging Face Spaces free tier)
-# For GPU support, comment out the CPU lines and uncomment the GPU lines
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.4.0+cpu
 torchvision==0.19.0+cpu
@@ -36,18 +35,16 @@ huggingface-hub==0.24.6
 Pillow==10.4.0
 
 # =============================================================================
+# PDF Generation (PRD Feature 6)
+# =============================================================================
+fpdf2==2.7.9
+
+# =============================================================================
 # Utilities
 # =============================================================================
 numpy==1.26.4
 requests==2.32.3
 tqdm==4.66.5
-
-# =============================================================================
-# Optional: Quantization (for GPU memory optimization)
-# Uncomment these for GPU deployment with limited VRAM
-# =============================================================================
-# bitsandbytes==0.43.3
-# optimum==1.21.4
 
 # =============================================================================
 # Optional: GPU Support
