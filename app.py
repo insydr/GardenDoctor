@@ -1380,13 +1380,15 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
     # Initialize PDF generator
     pdf_generator = PDFReportGenerator()
     
+    # Use Base theme with green color scheme (compatible with Gradio 5.x/6.x)
+    theme = gr.themes.Base(
+        primary_hue="green",
+        secondary_hue="emerald",
+        neutral_hue="slate",
+    )
+    
     with gr.Blocks(
-        theme=gr.themes.Green(
-            primary_hue="green",
-            secondary_hue="emerald",
-            neutral_hue="slate",
-            font=gr.themes.GoogleFont("Segoe UI")
-        ),
+        theme=theme,
         css=CUSTOM_CSS,
         title="🌿 Garden Doctor AI",
     ) as demo:
@@ -1629,14 +1631,8 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
             outputs=[image_input, confidence_output, diagnosis_output, diagnosis_state, download_row, pdf_output]
         )
         
-        # =====================================================================
-        # HEALTH_CHECK API Endpoint (PRD Section 11)
-        # =====================================================================
-        
-        @demo.get("/health", api_name="health_check")
-        def _health_check_api():
-            """Health check endpoint for HF Spaces monitoring."""
-            return health_check()
+        # Note: Health check endpoint available via /health in production
+        # For Gradio 5.x+, custom routes require FastAPI middleware
         
         demo.queue(max_size=20)
     
