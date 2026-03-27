@@ -9,6 +9,7 @@ PRD Reference:
 - Section 5.1 Feature 4: Confidence Threshold Handling
 - Section 5.2 Feature 5: Example Gallery
 - Section 5.2 Feature 6: PDF Report Export
+- Section 11: Hugging Face Spaces Optimization
 """
 
 import os
@@ -16,11 +17,14 @@ import re
 import time
 import logging
 import tempfile
+import threading
+import signal
 from datetime import datetime
 from typing import Tuple, Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from io import BytesIO
+from functools import wraps
 
 import gradio as gr
 import torch
@@ -54,8 +58,15 @@ MOCK_MODE = os.environ.get("GARDEN_DOCTOR_MOCK", "true").lower() == "true"
 # Image preprocessing configuration
 IMAGE_SIZE = 336
 
-# Inference timeout (seconds)
-INFERENCE_TIMEOUT = 60
+# Inference timeout (seconds) - PRD Section 11: 45 seconds for HF Spaces
+INFERENCE_TIMEOUT = int(os.environ.get("GARDEN_DOCTOR_TIMEOUT", "45"))
+
+# Quantization settings - PRD Section 11
+USE_4BIT_QUANTIZATION = os.environ.get("GARDEN_DOCTOR_4BIT", "auto").lower()  # auto, true, false
+ENABLE_CPU_OFFLOAD = os.environ.get("GARDEN_DOCTOR_CPU_OFFLOAD", "true").lower() == "true"
+
+# HF Spaces health check
+HEALTH_CHECK_ENABLED = os.environ.get("HEALTH_CHECK_ENABLED", "true").lower() == "true"
 
 # PDF Configuration
 PDF_AUTHOR = "Garden Doctor AI"
@@ -349,6 +360,117 @@ Consider that this plant is growing in a {climate} climate zone. Provide practic
 
 
 # =============================================================================
+# Timeout Handler for Inference (PRD Section 11)
+# =============================================================================
+
+class TimeoutError(Exception):
+    """Custom timeout exception for inference operations."""
+    pass
+
+
+class TimeoutHandler:
+    """Handle timeout for CPU-bound operations on HF Spaces."""
+    
+    def __init__(self, timeout_seconds: int = INFERENCE_TIMEOUT):
+        self.timeout_seconds = timeout_seconds
+    
+    def __enter__(self):
+        self.start_time = time.time()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+    
+    def check_timeout(self):
+        """Check if timeout has been exceeded."""
+        if time.time() - self.start_time > self.timeout_seconds:
+            raise TimeoutError(f"Inference timeout after {self.timeout_seconds} seconds")
+
+
+def run_with_timeout(func, args=(), kwargs=None, timeout: int = INFERENCE_TIMEOUT):
+    """
+    Run a function with a timeout limit.
+    
+    For CPU-bound operations, we use a simple time-check approach
+    since signal-based timeouts don't work well in threaded environments.
+    """
+    if kwargs is None:
+        kwargs = {}
+    
+    result = [None]
+    exception = [None]
+    
+    def target():
+        try:
+            result[0] = func(*args, **kwargs)
+        except Exception as e:
+            exception[0] = e
+    
+    thread = threading.Thread(target=target)
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout=timeout)
+    
+    if thread.is_alive():
+        # Thread is still running - timeout occurred
+        logger.warning(f"Operation timed out after {timeout} seconds")
+        raise TimeoutError(f"Operation timed out after {timeout} seconds")
+    
+    if exception[0] is not None:
+        raise exception[0]
+    
+    return result[0]
+
+
+# =============================================================================
+# Global Model Cache (PRD Section 11 - Singleton Pattern)
+# =============================================================================
+
+class ModelCache:
+    """
+    Global singleton cache for model instances.
+    
+    Prevents reloading the model on each request, which is critical
+    for Hugging Face Spaces free CPU tier.
+    """
+    _instance = None
+    _lock = threading.Lock()
+    _model_manager = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    @classmethod
+    def get_model_manager(cls, model_id: str = MODEL_ID, mock_mode: bool = MOCK_MODE) -> 'ModelManager':
+        """Get or create the global model manager instance."""
+        if cls._model_manager is None:
+            with cls._lock:
+                if cls._model_manager is None:
+                    logger.info("Initializing global model manager (cached)...")
+                    cls._model_manager = ModelManager(model_id=model_id, mock_mode=mock_mode)
+                    cls._model_manager.load_model()
+                    cls._initialized = True
+        return cls._model_manager
+    
+    @classmethod
+    def is_initialized(cls) -> bool:
+        """Check if the model has been initialized."""
+        return cls._initialized and cls._model_manager is not None
+    
+    @classmethod
+    def reset(cls):
+        """Reset the cache (for testing purposes)."""
+        with cls._lock:
+            cls._model_manager = None
+            cls._initialized = False
+
+
+# =============================================================================
 # Model Manager
 # =============================================================================
 
@@ -362,8 +484,24 @@ class ModelManager:
         self.processor = None
         self.is_loaded = False
         self.load_error: Optional[str] = None
+        self._quantization_mode = None  # Track quantization mode used
         
         logger.info(f"ModelManager initialized (mock_mode={mock_mode}, device={DEVICE})")
+    
+    def _check_4bit_availability(self) -> bool:
+        """Check if 4-bit quantization is available."""
+        try:
+            import bitsandbytes as bnb
+            # Check if we have GPU support for 4-bit
+            if torch.cuda.is_available():
+                logger.info("bitsandbytes available with GPU - 4-bit quantization possible")
+                return True
+            else:
+                logger.info("bitsandbytes available but no GPU - will use float16/32")
+                return False
+        except ImportError:
+            logger.info("bitsandbytes not available - will use standard precision")
+            return False
     
     def load_model(self) -> bool:
         if self.mock_mode:
@@ -378,30 +516,71 @@ class ModelManager:
             
             self.processor = AutoProcessor.from_pretrained(self.model_id)
             
+            # Base load kwargs
             load_kwargs = {
-                "torch_dtype": DTYPE,
                 "low_cpu_mem_usage": True,
             }
             
-            if torch.cuda.is_available():
-                load_kwargs["device_map"] = "auto"
-                load_kwargs["torch_dtype"] = torch.float16
+            # Determine quantization strategy
+            use_4bit = False
+            if USE_4BIT_QUANTIZATION == "true":
+                use_4bit = self._check_4bit_availability()
+            elif USE_4BIT_QUANTIZATION == "auto":
+                # Auto: use 4-bit if GPU available, else optimize for CPU
+                if torch.cuda.is_available():
+                    use_4bit = self._check_4bit_availability()
+            # else: USE_4BIT_QUANTIZATION == "false" -> don't use 4-bit
+            
+            if use_4bit and torch.cuda.is_available():
+                # 4-bit quantization for GPU (PRD Section 11)
+                logger.info("Loading model with 4-bit quantization...")
+                load_kwargs.update({
+                    "device_map": "auto",
+                    "load_in_4bit": True,
+                    "bnb_4bit_compute_dtype": torch.float16,
+                    "bnb_4bit_use_double_quant": True,
+                    "bnb_4bit_quant_type": "nf4",
+                })
+                self._quantization_mode = "4bit"
+            elif torch.cuda.is_available():
+                # GPU without 4-bit: use float16
+                logger.info("Loading model with float16 precision on GPU...")
+                load_kwargs.update({
+                    "device_map": "auto",
+                    "torch_dtype": torch.float16,
+                })
+                self._quantization_mode = "float16_gpu"
+            else:
+                # CPU optimization (PRD Section 11 for HF Spaces free tier)
+                logger.info("Loading model optimized for CPU (float32)...")
+                load_kwargs.update({
+                    "torch_dtype": torch.float32,
+                    "device_map": {"": DEVICE},
+                })
+                self._quantization_mode = "float32_cpu"
+            
+            logger.info(f"Load kwargs: {list(load_kwargs.keys())}")
             
             self.model = LlavaForConditionalGeneration.from_pretrained(
                 self.model_id, **load_kwargs
             )
             
-            if not torch.cuda.is_available():
-                self.model = self.model.to(DEVICE)
-            
+            # Set to eval mode
             self.model.eval()
+            
+            # Log model size
+            if hasattr(self.model, 'get_memory_footprint'):
+                memory_mb = self.model.get_memory_footprint() / (1024 * 1024)
+                logger.info(f"Model memory footprint: {memory_mb:.1f} MB")
+            
             self.is_loaded = True
-            logger.info("Model loaded successfully!")
+            logger.info(f"Model loaded successfully! Quantization mode: {self._quantization_mode}")
             return True
             
         except Exception as e:
             self.load_error = f"Error loading model: {str(e)}"
             logger.error(self.load_error)
+            logger.exception("Model loading failed with exception:")
             return False
     
     def preprocess_image(self, image: Image.Image) -> Image.Image:
@@ -418,7 +597,8 @@ class ModelManager:
         if not self.is_loaded:
             raise RuntimeError("Model not loaded.")
         
-        try:
+        def _inference():
+            """Inner inference function for timeout handling."""
             conversation = [
                 {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}
             ]
@@ -437,7 +617,25 @@ class ModelManager:
             generated_text = self.processor.decode(output[0], skip_special_tokens=True)
             response = generated_text.split("[/INST]")[-1].strip() if "[/INST]" in generated_text else generated_text.strip()
             return response
+        
+        try:
+            # Run inference with timeout (PRD Section 11)
+            logger.info(f"Starting inference with {INFERENCE_TIMEOUT}s timeout...")
+            start_time = time.time()
             
+            response = run_with_timeout(
+                _inference,
+                timeout=INFERENCE_TIMEOUT
+            )
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Inference completed in {elapsed:.2f}s")
+            
+            return response
+            
+        except TimeoutError:
+            logger.error(f"Inference timeout after {INFERENCE_TIMEOUT} seconds")
+            raise
         except Exception as e:
             logger.error(f"Inference error: {str(e)}")
             raise
@@ -987,6 +1185,7 @@ def diagnose_plant(
         progress(0.1, desc="📷 Validating image...")
         progress(0.15, desc="🔄 Preprocessing...")
         
+        # PRD Section 11: Use LANCZOS resampling for efficient preprocessing
         processed_image = model_manager.preprocess_image(image)
         
         progress(0.2, desc="🤖 Loading AI model...")
@@ -997,7 +1196,16 @@ def diagnose_plant(
         progress(0.3, desc="🔍 Analyzing leaf patterns...")
         
         try:
+            # PRD Section 11: Inference with timeout handling
             response = model_manager.generate_response(processed_image, prompt)
+        except TimeoutError:
+            logger.error("Diagnosis timed out")
+            error_result = DiagnosisResult(
+                status=ProcessingStatus.ERROR, 
+                error_message="timeout",
+                processing_time=INFERENCE_TIMEOUT
+            )
+            return {}, ERROR_MESSAGES["timeout"], error_result
         except Exception as e:
             logger.error(f"Model inference error: {str(e)}")
             error_result = DiagnosisResult(status=ProcessingStatus.ERROR, error_message="model_error")
@@ -1123,6 +1331,49 @@ footer { display: none !important; }
 # Gradio Interface
 # =============================================================================
 
+# =============================================================================
+# HEALTH_CHECK Endpoint (PRD Section 11 - HF Spaces Monitoring)
+# =============================================================================
+
+def health_check() -> Dict[str, Any]:
+    """
+    Health check endpoint for Hugging Face Spaces monitoring.
+    
+    Returns:
+        Dict with status, model info, and system metrics.
+    """
+    status_info = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "Garden Doctor AI",
+        "version": "1.0.0",
+        "model_id": MODEL_ID,
+        "device": DEVICE,
+        "mock_mode": MOCK_MODE,
+        "timeout": INFERENCE_TIMEOUT,
+    }
+    
+    # Check model status
+    if ModelCache.is_initialized():
+        mm = ModelCache._model_manager
+        status_info["model_loaded"] = mm.is_loaded if mm else False
+        status_info["quantization_mode"] = mm._quantization_mode if mm and hasattr(mm, '_quantization_mode') else None
+    else:
+        status_info["model_loaded"] = False
+        status_info["quantization_mode"] = None
+    
+    # Add memory info if available
+    try:
+        import psutil
+        process = psutil.Process()
+        status_info["memory_mb"] = round(process.memory_info().rss / (1024 * 1024), 1)
+        status_info["cpu_percent"] = process.cpu_percent()
+    except ImportError:
+        pass
+    
+    return status_info
+
+
 def create_interface(model_manager: ModelManager) -> gr.Blocks:
     """Create the Gradio interface with examples and PDF export."""
     
@@ -1155,7 +1406,9 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
         """)
         
         status_text = "🔧 Mock Mode" if model_manager.mock_mode else f"✅ Ready ({DEVICE.upper()})"
-        gr.HTML(f'<div style="text-align: center; margin-bottom: 15px;"><span style="background: #90EE90; color: #228B22; padding: 5px 15px; border-radius: 20px; font-weight: bold;">{status_text}</span></div>')
+        quant_mode = model_manager._quantization_mode or "default"
+        status_detail = f" | {quant_mode}" if quant_mode != "default" else ""
+        gr.HTML(f'<div style="text-align: center; margin-bottom: 15px;"><span style="background: #90EE90; color: #228B22; padding: 5px 15px; border-radius: 20px; font-weight: bold;">{status_text}{status_detail}</span></div>')
         
         # =====================================================================
         # Main Content
@@ -1376,6 +1629,15 @@ def create_interface(model_manager: ModelManager) -> gr.Blocks:
             outputs=[image_input, confidence_output, diagnosis_output, diagnosis_state, download_row, pdf_output]
         )
         
+        # =====================================================================
+        # HEALTH_CHECK API Endpoint (PRD Section 11)
+        # =====================================================================
+        
+        @demo.get("/health", api_name="health_check")
+        def _health_check_api():
+            """Health check endpoint for HF Spaces monitoring."""
+            return health_check()
+        
         demo.queue(max_size=20)
     
     return demo
@@ -1392,18 +1654,25 @@ def main():
     print(f"Model: {MODEL_ID}")
     print(f"Device: {DEVICE}")
     print(f"Mock Mode: {MOCK_MODE}")
+    print(f"Timeout: {INFERENCE_TIMEOUT}s")
+    print(f"4-bit Quantization: {USE_4BIT_QUANTIZATION}")
     print(f"Examples: {len(EXAMPLE_IMAGES)} images")
     print("=" * 60)
     
-    model_manager = ModelManager(model_id=MODEL_ID, mock_mode=MOCK_MODE)
+    # PRD Section 11: Use global model cache to avoid reloading per request
+    model_manager = ModelCache.get_model_manager(model_id=MODEL_ID, mock_mode=MOCK_MODE)
     
-    if not model_manager.load_model():
+    if not model_manager.is_loaded:
         print(f"❌ Failed to load model: {model_manager.load_error}")
         print("⚠️ Starting in mock mode...")
         model_manager.mock_mode = True
         model_manager.is_loaded = True
     
     demo = create_interface(model_manager)
+    
+    # Log health check endpoint availability
+    if HEALTH_CHECK_ENABLED:
+        print("🏥 Health check endpoint enabled at /health")
     
     demo.launch(
         server_name="0.0.0.0",
